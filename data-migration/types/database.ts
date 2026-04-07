@@ -1,0 +1,69 @@
+// Tipos base para todo banco de dados
+export type DatabaseType = "postgresql" | "mongodb";
+
+export interface BaseDatabaseConfig {
+  type: DatabaseType;
+  name: string;
+}
+
+// PostgreSQL Configuration
+export interface PostgreSQLConfig extends BaseDatabaseConfig {
+  type: "postgresql";
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  database: string;
+  ssl?: boolean;
+}
+
+// MongoDB Configuration
+export interface MongoDBConfig extends BaseDatabaseConfig {
+  type: "mongodb";
+  host: string;
+  port: number;
+  user?: string;
+  password?: string;
+  database: string;
+  authSource?: string;
+  ssl?: boolean;
+}
+
+// Union type de todas as configurações
+export type DatabaseConfig = PostgreSQLConfig | MongoDBConfig;
+
+// Configuração de migração
+export interface MigrationConfig {
+  source: DatabaseConfig;
+  destination: DatabaseConfig;
+}
+
+// Metadados dos bancos com campos obrigatórios e opcionais
+export const DATABASE_METADATA: Record<
+  DatabaseType,
+  {
+    label: string;
+    icon: string;
+    fields: {
+      required: string[];
+      optional: string[];
+    };
+  }
+> = {
+  postgresql: {
+    label: "PostgreSQL",
+    icon: "🐘",
+    fields: {
+      required: ["host", "port", "user", "password", "database"],
+      optional: ["ssl"],
+    },
+  },
+  mongodb: {
+    label: "MongoDB",
+    icon: "🍃",
+    fields: {
+      required: ["host", "port", "database"],
+      optional: ["user", "password", "authSource", "ssl"],
+    },
+  },
+};
