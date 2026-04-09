@@ -6,6 +6,7 @@ export type Step =
   | "preview"
   | "selectTables"
   | "selectColumns"
+  | "selectAlgorithm"
   | "migrating";
 
 export type MigrationStage =
@@ -23,5 +24,6 @@ export const stepTitles: Record<Step, string> = {
   preview: "Resumo da Migração",
   selectTables: "Selecione as Tabelas para Migrar",
   selectColumns: "Selecione as Colunas",
+  selectAlgorithm: "Selecione o Algoritmo de Destino",
   migrating: "Migrando Dados...",
 };

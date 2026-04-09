@@ -1,4 +1,4 @@
-import { DatabaseConfig } from "@/types/database";
+import { DatabaseConfig, DatabaseType } from "@/types/database";
 import { ModeloIntermediario } from "@/core/types";
 
 interface ApiResponse<T> {
@@ -68,12 +68,16 @@ export async function exportDatabase(
   columns: Record<string, string[]>,
   columnMappings: Record<string, Record<string, string>>,
   tableMappings: Record<string, string>,
+  destinationType: DatabaseType | "",
+  algorithm: number,
 ): Promise<ModeloIntermediario> {
   const response = await fetch("/api/database/export", {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify({
       config,
+      destinationType,
+      algorithm,
       tables,
       columns,
       columnMappings,
@@ -103,4 +107,19 @@ export async function importDatabase(
     response,
     "Erro ao importar dados",
   );
+}
+
+export async function listAlgorithms(config: DatabaseConfig): Promise<any[]> {
+  const response = await fetch("/api/database/algorithms", {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify(config),
+  });
+
+  const data = await handleResponse<{ algorithms: any[] }>(
+    response,
+    "Erro ao listar algoritmos",
+  );
+
+  return data.algorithms;
 }

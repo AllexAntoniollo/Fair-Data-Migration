@@ -5,16 +5,25 @@ import { MigrationEngine } from "@/core/MigrationEngine";
 import pgPromise from "pg-promise";
 import { MongoClient } from "mongodb";
 import { ModeloIntermediario } from "@/core/types";
+import { DatabaseType } from "@/types/database";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const { config, tables, columns, columnMappings, tableMappings } = body;
+    const {
+      config,
+      destinationType,
+      algorithm = 1,
+      tables,
+      columns,
+      columnMappings,
+      tableMappings,
+    } = body;
 
     const { type, schema = "public", ...connectionConfig } = config;
 
-    let exportedData: ModeloIntermediario = { data: {} };
+    let exportedData: ModeloIntermediario = { data: {}, schema: {} };
     const engine = new MigrationEngine();
 
     if (type === "postgresql") {
@@ -44,7 +53,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ success: true, data: exportedData });
+    const transformedData = transformForDestination(
+      destinationType,
+      algorithm,
+      exportedData,
+    );
+
+    return NextResponse.json({ success: true, data: transformedData });
   } catch (error) {
     console.error("Erro ao exportar dados:", error);
     return NextResponse.json(
@@ -76,6 +91,7 @@ async function exportPostgres(
   try {
     const adapter = new PostgresAdapter(pgDb);
     await adapter.connect();
+
     const data = await engine.createModel(
       adapter,
       tables,
@@ -120,4 +136,22 @@ async function exportMongoDB(
     await client.close();
     throw error;
   }
+}
+
+function transformForDestination(
+  destinationType: DatabaseType,
+  algorithm: number,
+  data: ModeloIntermediario,
+): ModeloIntermediario {
+  if (destinationType === "postgresql") {
+    const adapter = new PostgresAdapter(null as any);
+    return adapter.transformData(data, algorithm);
+  }
+
+  if (destinationType === "mongodb") {
+    const adapter = new MongoAdapter(null as any);
+    return adapter.transformData(data, algorithm);
+  }
+
+  throw new Error("Tipo de banco de destino não suportado");
 }

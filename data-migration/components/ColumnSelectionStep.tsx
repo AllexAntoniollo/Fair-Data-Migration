@@ -18,7 +18,7 @@ interface ColumnSelectionStepProps {
   ) => void;
   onUpdateTableMapping: (table: string, destTable: string) => void;
   onBack: () => void;
-  onStartMigration: () => Promise<void>;
+  onNext: () => void;
 }
 
 export const ColumnSelectionStep: React.FC<ColumnSelectionStepProps> = ({
@@ -32,7 +32,7 @@ export const ColumnSelectionStep: React.FC<ColumnSelectionStepProps> = ({
   onUpdateColumnMapping,
   onUpdateTableMapping,
   onBack,
-  onStartMigration,
+  onNext,
 }) => (
   <div className="space-y-4">
     <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-700">
@@ -127,10 +127,10 @@ export const ColumnSelectionStep: React.FC<ColumnSelectionStepProps> = ({
         ← Voltar
       </button>
       <button
-        onClick={onStartMigration}
+        onClick={onNext}
         className="flex-1 px-4 py-2 bg-linear-to-r from-green-600 to-green-700 text-white rounded-lg font-medium hover:from-green-700 hover:to-green-800"
       >
-        ✨ Iniciar Migração
+        Próximo: escolher algoritmo
       </button>
     </div>
   </div>

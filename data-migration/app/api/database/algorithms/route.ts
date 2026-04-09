@@ -9,18 +9,17 @@ export async function POST(request: NextRequest) {
     const config = await request.json();
     const dbType = config.type as string;
 
-    let tables: string[] = [];
-    console.log(dbType);
+    let algorithms: any[] = [];
 
     if (dbType === "postgresql") {
-      tables = await listTablesPostgres(config);
+      algorithms = await listAlgorithmsPostgres(config);
     } else if (dbType === "mongodb") {
-      tables = await listTablesMongoDB(config);
+      algorithms = await listAlgorithmsMongoDB(config);
     }
 
-    return NextResponse.json({ success: true, tables });
+    return NextResponse.json({ success: true, algorithms });
   } catch (error) {
-    console.error("Erro ao listar tabelas:", error);
+    console.error("Erro ao listar algoritmos:", error);
     return NextResponse.json(
       { success: false, error: (error as Error).message },
       { status: 500 },
@@ -28,7 +27,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function listTablesPostgres(config: any): Promise<string[]> {
+async function listAlgorithmsPostgres(config: any): Promise<any[]> {
   const pgp = pgPromise();
   const pgDb = pgp({
     host: config.host,
@@ -42,31 +41,33 @@ async function listTablesPostgres(config: any): Promise<string[]> {
   try {
     const adapter = new PostgresAdapter(pgDb);
     await adapter.connect();
-    const tables = await adapter.listTables("public");
+    const algorithms = adapter.listAlgorithms();
 
     await pgp.end();
-    return tables;
+    return algorithms;
   } catch (error) {
     await pgp.end();
     throw error;
   }
 }
 
-async function listTablesMongoDB(config: any): Promise<string[]> {
-  const mongoUrl = `mongodb://${config.user ? config.user + ":" + config.password + "@" : ""}${config.host}:${config.port}/${config.database}${config.authSource ? `?authSource=${config.authSource}` : ""}`;
+async function listAlgorithmsMongoDB(config: any): Promise<any[]> {
+  const connectionString = `mongodb://${config.host}:${config.port}/${config.database}`;
 
-  const mongoClient = new MongoClient(mongoUrl);
+  const client = new MongoClient(connectionString);
 
   try {
-    await mongoClient.connect();
-    const mongoDb = mongoClient.db(config.database);
-    const adapter = new MongoAdapter(mongoDb);
+    await client.connect();
+
+    const adapter = new MongoAdapter(client.db(config.database));
     await adapter.connect();
-    const tables = await adapter.listTables(config.database);
-    await mongoClient.close();
-    return tables;
+
+    const algorithms = adapter.listAlgorithms();
+
+    await client.close();
+    return algorithms;
   } catch (error) {
-    await mongoClient.close();
+    await client.close();
     throw error;
   }
 }

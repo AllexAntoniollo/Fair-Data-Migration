@@ -1,5 +1,4 @@
-import { DatabaseAdapter, ModeloIntermediario } from "./types";
-import { writeFileSync } from "fs";
+import { DatabaseAdapter, ModeloIntermediario, TableSchema } from "./types";
 
 export class MigrationEngine {
   async createModel(
@@ -9,13 +8,25 @@ export class MigrationEngine {
     columnMappings: Record<string, Record<string, string>> = {},
     tableMappings: Record<string, string> = {},
   ): Promise<ModeloIntermediario> {
+    console.log("Criando modelo");
+
     const dataDict: { [key: string]: any[] } = {};
+    const schemaDict: Record<string, TableSchema> = {};
+
+    // 🔥 1. Buscar schema completo do banco
+
+    let fullSchema: Record<string, TableSchema> = {};
+
+    if (adapter.listSchema) {
+      fullSchema = await adapter.listSchema("public");
+    }
 
     for (const table of selectedTables) {
+      const destTable = tableMappings?.[table] || table;
+
       try {
         const columns = selectedColumns[table] || [];
         const data = await adapter.read(table, columns.join(", "));
-        const destTable = tableMappings?.[table] || table;
 
         dataDict[destTable] = data.map((record) => {
           const mapping = columnMappings?.[table] || {};
@@ -32,18 +43,54 @@ export class MigrationEngine {
         });
       } catch (error) {
         console.error(`Erro ao ler tabela ${table}:`, error);
-        const destTable = tableMappings?.[table] || table;
         dataDict[destTable] = [];
+      }
+
+      // 🧠 2. Montar schema da tabela (PK + FK)
+
+      const tableSchema = fullSchema[table];
+
+      if (tableSchema) {
+        const columnMap = columnMappings?.[table] || {};
+
+        // 🔑 mapear PK (caso coluna tenha sido renomeada)
+        const mappedPK =
+          columnMap[tableSchema.primaryKey] || tableSchema.primaryKey;
+
+        // 🔗 mapear FKs (coluna e nome da tabela)
+        const mappedFKs = tableSchema.foreignKeys.map((fk) => ({
+          field: columnMap[fk.field] || fk.field,
+          references: {
+            table: tableMappings?.[fk.references.table] || fk.references.table,
+            field: fk.references.field,
+          },
+        }));
+
+        schemaDict[destTable] = {
+          primaryKey: mappedPK,
+          foreignKeys: mappedFKs,
+        };
+      } else {
+        // fallback
+        schemaDict[destTable] = {
+          primaryKey: "id",
+          foreignKeys: [],
+        };
       }
     }
 
-    return { data: dataDict };
+    return {
+      data: dataDict,
+      schema: schemaDict,
+    };
   }
 
   async importData(
     adapter: DatabaseAdapter,
     data: ModeloIntermediario,
   ): Promise<void> {
+    console.log(data.data);
+
     for (const [table, records] of Object.entries(data.data)) {
       await adapter.write(table, records);
     }

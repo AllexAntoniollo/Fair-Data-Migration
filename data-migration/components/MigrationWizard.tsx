@@ -13,6 +13,7 @@ import { ConnectionForm } from "./ConnectionForm";
 import { PreviewStep } from "./PreviewStep";
 import { TableSelectionStep } from "./TableSelectionStep";
 import { ColumnSelectionStep } from "./ColumnSelectionStep";
+import { AlgorithmSelectionStep } from "./AlgorithmSelectionStep";
 import { MigratingStep } from "./MigratingStep";
 import { NavigationButtons } from "./NavigationButtons";
 import { ModeloIntermediario } from "@/core/types";
@@ -21,6 +22,7 @@ import {
   exportDatabase,
   listColumns,
   listTables,
+  listAlgorithms,
 } from "@/app/services/Web2Service";
 import { MigrationEngine } from "@/core/MigrationEngine";
 import { MigrationStage, Step, stepTitles } from "./stepTypes";
@@ -52,6 +54,7 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
   const [tableMappings, setTableMappings] = useState<Record<string, string>>(
     {},
   );
+  const [selectedAlgorithm, setSelectedAlgorithm] = useState<number>(1);
   const [migrationStage, setMigrationStage] = useState<MigrationStage>("idle");
   const [exportedData, setExportedData] = useState<ModeloIntermediario | null>(
     null,
@@ -60,6 +63,7 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
   const [downloadFileName, setDownloadFileName] = useState<string>(
     "modelo_intermediario",
   );
+  const [availableAlgorithms, setAvailableAlgorithms] = useState<any[]>([]);
 
   const handleSourceDbSelect = (db: DatabaseType) => {
     setSourceDb(db);
@@ -89,6 +93,10 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
     setIsLoading(true);
     try {
       setDestConfig(config);
+      // Listar algoritmos disponíveis do banco de destino
+      const algorithms = await listAlgorithms(config);
+      setAvailableAlgorithms(algorithms);
+      setSelectedAlgorithm(algorithms[0]?.id ?? 1);
       setStep("preview");
     } catch (error) {
       console.error("Erro ao conectar:", error);
@@ -168,6 +176,7 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
     setSelectedColumns({});
     setColumnMappings({});
     setTableMappings({});
+    setSelectedAlgorithm(1);
     setDownloadFileName("modelo_intermediario");
   };
 
@@ -259,6 +268,8 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
         selectedColumns,
         columnMappings,
         tableMappings,
+        destDb,
+        selectedAlgorithm,
       );
       setExportedData(exportData);
       setMigrationStage("exported");
@@ -278,6 +289,7 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
     "preview",
     "selectTables",
     "selectColumns",
+    "selectAlgorithm",
     "migrating",
   ];
 
@@ -409,6 +421,19 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
               onUpdateColumnMapping={updateColumnMapping}
               onUpdateTableMapping={updateTableMapping}
               onBack={() => setStep("selectTables")}
+              onNext={() => setStep("selectAlgorithm")}
+            />
+          )}
+
+          {/* Step 8: Select Algorithm */}
+          {step === "selectAlgorithm" && (
+            <AlgorithmSelectionStep
+              destDb={destDb}
+              algorithmOptions={availableAlgorithms}
+              selectedAlgorithm={selectedAlgorithm}
+              isLoading={isLoading}
+              onSelectAlgorithm={setSelectedAlgorithm}
+              onBack={() => setStep("selectColumns")}
               onStartMigration={startMigration}
             />
           )}
