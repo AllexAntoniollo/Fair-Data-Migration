@@ -8,8 +8,6 @@ export class MigrationEngine {
     columnMappings: Record<string, Record<string, string>> = {},
     tableMappings: Record<string, string> = {},
   ): Promise<ModeloIntermediario> {
-    console.log("Criando modelo");
-
     const dataDict: { [key: string]: any[] } = {};
     const schemaDict: Record<string, TableSchema> = {};
 
@@ -89,8 +87,6 @@ export class MigrationEngine {
     adapter: DatabaseAdapter,
     data: ModeloIntermediario,
   ): Promise<void> {
-    console.log(data.data);
-
     for (const [table, records] of Object.entries(data.data)) {
       await adapter.write(table, records);
     }

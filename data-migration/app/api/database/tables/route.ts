@@ -10,7 +10,6 @@ export async function POST(request: NextRequest) {
     const dbType = config.type as string;
 
     let tables: string[] = [];
-    console.log(dbType);
 
     if (dbType === "postgresql") {
       tables = await listTablesPostgres(config);

@@ -53,7 +53,6 @@ export class MongoAdapter implements DatabaseAdapter {
     return Array.from(fields);
   }
 
-  async disconnect() {}
   transformData(
     data: ModeloIntermediario,
     algorithm: number,
@@ -71,110 +70,138 @@ export class MongoAdapter implements DatabaseAdapter {
   }
 
   private algorithm1(data: ModeloIntermediario): ModeloIntermediario {
-    // Identidade (não altera nada)
     return data;
   }
 
-  private algorithm2(data: ModeloIntermediario): ModeloIntermediario {
+  private algorithm2(
+    data: ModeloIntermediario,
+    MX_ATT: number = 5,
+  ): ModeloIntermediario {
     const { data: tables, schema } = data;
+    const transformed: ModeloIntermediario = { data: {}, schema };
 
-    const transformed: ModeloIntermediario = {
-      data: {},
-      schema,
-    };
+    const aggregatedTables = new Set<string>();
 
-    const aggregated = new Set<string>();
+    const JTList = new Set<string>();
 
-    // 🔁 mapa reverso: quem referencia quem
-    const referencedBy: Record<string, string[]> = {};
+    const sortedTableNames = Object.keys(tables).sort(
+      (a, b) =>
+        (schema[a].foreignKeys?.length || 0) -
+        (schema[b].foreignKeys?.length || 0),
+    );
 
-    for (const [table, tableSchema] of Object.entries(schema)) {
-      for (const fk of tableSchema.foreignKeys) {
-        const parent = fk.references.table;
+    for (const t of sortedTableNames) {
+      const tableSchema = schema[t];
 
-        if (!referencedBy[parent]) {
-          referencedBy[parent] = [];
-        }
+      const nbFK = tableSchema.foreignKeys.length;
 
-        referencedBy[parent].push(table);
+      const nbReft = Object.values(schema).filter((s) =>
+        s.foreignKeys.some((fk) => fk.references.table === t),
+      ).length;
+
+      const pk = tableSchema.primaryKey;
+      const sample = tables[t]?.[0] || {};
+      const nbCols = Object.keys(sample).length - (pk ? 1 : 0) - nbFK;
+
+      if (nbReft === 0 && nbFK === 2 && nbCols < MX_ATT) {
+        JTList.add(t);
       }
     }
 
-    // 🔍 detectar join tables (N:N)
-    const isJoinTable = (table: string) => {
-      return schema[table].foreignKeys.length === 2;
-    };
+    for (const table of sortedTableNames) {
+      if (JTList.has(table) || aggregatedTables.has(table)) {
+        continue;
+      }
 
-    for (const [table, records] of Object.entries(tables)) {
-      if (aggregated.has(table)) continue;
+      const tableSchema = schema[table];
+      const pk = tableSchema.primaryKey;
 
       transformed.data[table] = [];
 
-      for (const record of records) {
-        const doc: any = { ...record };
+      for (const r of tables[table]) {
+        const D: any = { ...r };
 
-        const children = referencedBy[table] || [];
+        let usedJoin = false;
+        for (const jtName of JTList) {
+          const jtSchema = schema[jtName];
+          const fkToCurrent = jtSchema.foreignKeys.find(
+            (f) => f.references.table === table,
+          );
+          const fkToOther = jtSchema.foreignKeys.find(
+            (f) => f.references.table !== table,
+          );
 
-        for (const childTable of children) {
-          if (aggregated.has(childTable)) continue;
+          if (fkToCurrent && fkToOther) {
+            const matches = [];
 
-          const childSchema = schema[childTable];
-          const childRecords = tables[childTable];
+            for (const joinRow of tables[jtName]) {
+              const joinValue = joinRow[fkToCurrent.field];
+              const currentId = r[pk];
 
-          // 🧩 CASO 1: tabela normal (1:N)
-          if (childSchema.foreignKeys.length === 1) {
-            const fk = childSchema.foreignKeys[0];
-
-            const embedded = childRecords.filter(
-              (r) => r[fk.field] === record[schema[table].primaryKey],
-            );
-
-            if (embedded.length > 0) {
-              doc[childTable] = embedded;
-              aggregated.add(childTable);
+              if (joinValue === currentId) {
+                matches.push(joinRow);
+              }
             }
-          }
 
-          // 🔥 CASO 2: join table (N:N)
-          else if (isJoinTable(childTable)) {
-            const [fk1, fk2] = childSchema.foreignKeys;
+            if (matches.length > 0) {
+              const otherTable = fkToOther.references.table;
+              const otherPK = schema[otherTable].primaryKey;
 
-            // identificar qual FK aponta pra tabela atual
-            const fkToParent = fk1.references.table === table ? fk1 : fk2;
+              const relatedData = matches
+                .map((m) =>
+                  tables[otherTable].find(
+                    (row) => row[otherPK] === m[fkToOther.field],
+                  ),
+                )
+                .filter(Boolean);
 
-            const fkToOther = fk1.references.table === table ? fk2 : fk1;
-
-            // pegar registros da join table relacionados
-            const joinRecords = childRecords.filter(
-              (r) => r[fkToParent.field] === record[schema[table].primaryKey],
-            );
-
-            if (joinRecords.length > 0) {
-              doc[childTable] = joinRecords.map((jr) => {
-                const relatedTable = fkToOther.references.table;
-                const relatedPK = schema[relatedTable].primaryKey;
-
-                const related = tables[relatedTable].find(
-                  (r) => r[relatedPK] === jr[fkToOther.field],
-                );
-
-                return {
-                  ...jr,
-                  [relatedTable]: related || null,
-                };
-              });
-
-              aggregated.add(childTable);
+              if (relatedData.length > 0) {
+                D[otherTable] = relatedData;
+                aggregatedTables.add(jtName);
+                usedJoin = true;
+              }
             }
           }
         }
 
-        transformed.data[table].push(doc);
+        if (usedJoin) {
+          transformed.data[table].push(D);
+          continue;
+        }
+
+        for (const [trName, trSchema] of Object.entries(schema)) {
+          const nbFK = trSchema.foreignKeys.length;
+
+          if (nbFK === 1) {
+            const fk = trSchema.foreignKeys[0];
+
+            if (fk.references.table === table) {
+              const relatedRows = [];
+
+              for (const childRow of tables[trName]) {
+                const childForeignKey = childRow[fk.field];
+                const parentPrimaryKey = r[pk];
+
+                if (childForeignKey === parentPrimaryKey) {
+                  relatedRows.push(childRow);
+                }
+              }
+
+              if (relatedRows.length > 0) {
+                D[trName] = relatedRows;
+                aggregatedTables.add(trName);
+              }
+            }
+          }
+        }
+
+        transformed.data[table].push(D);
       }
     }
 
     return transformed;
   }
+
   listAlgorithms(): AlgorithmInfo[] {
     return [
       {

@@ -9,7 +9,6 @@ interface PreviewStepProps {
   destConfig: DatabaseConfig;
   isLoading: boolean;
   onBack: () => void;
-  onReset: () => void;
   onNext: () => void;
 }
 
@@ -18,7 +17,6 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({
   destConfig,
   isLoading,
   onBack,
-  onReset,
   onNext,
 }) => (
   <div className="space-y-4">
@@ -84,12 +82,7 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({
       >
         ← Voltar
       </button>
-      <button
-        onClick={onReset}
-        className="flex-1 px-4 py-2 border border-slate-600 rounded-lg font-medium text-slate-300 hover:bg-slate-800 hover:text-white"
-      >
-        Recomeçar
-      </button>
+
       <button
         onClick={onNext}
         disabled={isLoading}

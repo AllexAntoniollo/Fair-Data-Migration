@@ -72,9 +72,6 @@ export class PostgresAdapter implements DatabaseAdapter {
     return result.map((r: any) => r.column_name);
   }
 
-  async disconnect() {
-    // opcional
-  }
   transformData(
     data: ModeloIntermediario,
     algorithm: number,
@@ -102,7 +99,6 @@ export class PostgresAdapter implements DatabaseAdapter {
   }
   async listSchema(schemaName: string): Promise<Record<string, TableSchema>> {
     const result: Record<string, TableSchema> = {};
-    console.log("Listagem");
 
     // 🔑 PKs
 
@@ -119,8 +115,6 @@ export class PostgresAdapter implements DatabaseAdapter {
   `,
       [schemaName],
     );
-    console.log("Passou da query");
-    console.log(pkRows);
 
     for (const row of pkRows) {
       if (!result[row.table_name]) {
