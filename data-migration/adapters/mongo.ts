@@ -75,7 +75,7 @@ export class MongoAdapter implements DatabaseAdapter {
 
   private algorithm2(
     data: ModeloIntermediario,
-    MX_ATT: number = 5,
+    MX_ATT: number = 2,
   ): ModeloIntermediario {
     const { data: tables, schema } = data;
     const transformed: ModeloIntermediario = { data: {}, schema };
@@ -86,8 +86,8 @@ export class MongoAdapter implements DatabaseAdapter {
 
     const sortedTableNames = Object.keys(tables).sort(
       (a, b) =>
-        (schema[a].foreignKeys?.length || 0) -
-        (schema[b].foreignKeys?.length || 0),
+        (schema[b].foreignKeys?.length || 0) -
+        (schema[a].foreignKeys?.length || 0),
     );
 
     for (const t of sortedTableNames) {
@@ -123,6 +123,9 @@ export class MongoAdapter implements DatabaseAdapter {
 
         let usedJoin = false;
         for (const jtName of JTList) {
+          if (aggregatedTables.has(jtName)) {
+            continue;
+          }
           const jtSchema = schema[jtName];
           const fkToCurrent = jtSchema.foreignKeys.find(
             (f) => f.references.table === table,
@@ -158,6 +161,8 @@ export class MongoAdapter implements DatabaseAdapter {
               if (relatedData.length > 0) {
                 D[otherTable] = relatedData;
                 aggregatedTables.add(jtName);
+                aggregatedTables.add(otherTable);
+
                 usedJoin = true;
               }
             }

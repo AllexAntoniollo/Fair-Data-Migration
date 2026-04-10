@@ -11,8 +11,6 @@ export class MigrationEngine {
     const dataDict: { [key: string]: any[] } = {};
     const schemaDict: Record<string, TableSchema> = {};
 
-    // 🔥 1. Buscar schema completo do banco
-
     let fullSchema: Record<string, TableSchema> = {};
 
     if (adapter.listSchema) {
