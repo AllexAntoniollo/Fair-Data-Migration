@@ -10,7 +10,12 @@ export class PostgresAdapter implements DatabaseAdapter {
   constructor(private db: IDatabase<any>) {}
 
   async connect() {
-    // pg-promise conecta automaticamente
+    try {
+      const result = await this.db.one("SELECT 1 AS ok");
+    } catch (error) {
+      console.error("Erro ao conectar no Postgres:", error);
+      throw error;
+    }
   }
 
   async read(table: string, params: string) {

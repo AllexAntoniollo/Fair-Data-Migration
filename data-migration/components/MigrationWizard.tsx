@@ -73,12 +73,34 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
   const handleSourceConfigSubmit = async (config: DatabaseConfig) => {
     setIsLoading(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Simular delay
-      setSourceConfig(config);
-      setStep("selectDest");
+      // Teste a conexão com a rota de API
+      const response = await fetch("/api/database/connect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(config),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message);
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        setSourceConfig(config);
+        setStep("selectDest");
+      } else {
+        alert(`Erro ao conectar ao banco de origem: ${result.message}`);
+      }
     } catch (error) {
       console.error("Erro ao conectar:", error);
-      alert("Erro ao conectar ao banco de origem");
+      alert(
+        `Erro ao conectar ao banco de origem: ${
+          error instanceof Error ? error.message : "Erro desconhecido"
+        }`,
+      );
     } finally {
       setIsLoading(false);
     }
@@ -92,16 +114,36 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
   const handleDestConfigSubmit = async (config: DatabaseConfig) => {
     setIsLoading(true);
     try {
-      setDestConfig(config);
-      // Listar algoritmos disponíveis do banco de destino
-      const algorithms = await listAlgorithms(config);
-      setAvailableAlgorithms(algorithms);
-      setSelectedAlgorithm(algorithms[0]?.id ?? 1);
-      setStep("preview");
+      // Teste a conexão com a rota de API
+      const response = await fetch("/api/database/connect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(config),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message);
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        setDestConfig(config);
+        const algorithms = await listAlgorithms(config);
+        setAvailableAlgorithms(algorithms);
+        setSelectedAlgorithm(algorithms[0]?.id ?? 1);
+        setStep("preview");
+      } else {
+        alert(`Erro ao conectar ao banco de destino: ${result.message}`);
+      }
     } catch (error) {
       console.error("Erro ao conectar:", error);
       alert(
-        `Erro ao conectar ao banco de destino: ${(error as Error).message}`,
+        `Erro ao conectar ao banco de destino: ${
+          error instanceof Error ? error.message : "Erro desconhecido"
+        }`,
       );
     } finally {
       setIsLoading(false);
@@ -391,7 +433,6 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
               destConfig={destConfig}
               isLoading={isLoading}
               onBack={() => setStep("configDest")}
-              onReset={handleReset}
               onNext={handleGoToSelectTables}
             />
           )}

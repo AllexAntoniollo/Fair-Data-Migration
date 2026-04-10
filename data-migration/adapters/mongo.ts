@@ -8,8 +8,14 @@ import { Db } from "mongodb";
 export class MongoAdapter implements DatabaseAdapter {
   constructor(private db: Db) {}
 
-  async connect() {}
-
+  async connect() {
+    try {
+      const result = await this.db.command({ ping: 1 });
+    } catch (error) {
+      console.error("Erro ao conectar no MongoDB:", error);
+      throw error;
+    }
+  }
   async read(collection: string) {
     return await this.db.collection(collection).find().toArray();
   }
