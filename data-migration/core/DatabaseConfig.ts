@@ -21,9 +21,5 @@ export interface MongodbConfig {
   database: string;
 }
 
-export const mongodbConfigDefaults: Partial<MongodbConfig> = {
-  url: "mongodb://localhost:27017",
-};
-
 // ========== UNION TYPE ==========
 export type DatabaseConfig = PostgresConfig | MongodbConfig;

@@ -1,13 +1,13 @@
 export type ForeignKey = {
-  field: string; // campo na tabela atual
+  field: string;
   references: {
-    table: string; // tabela referenciada
-    field: string; // campo referenciado (geralmente PK)
+    table: string;
+    field: string;
   };
 };
 
 export type TableSchema = {
-  primaryKey: string; // ex: "id" ou "tx_hash"
+  primaryKey: string;
   foreignKeys: ForeignKey[];
 };
 

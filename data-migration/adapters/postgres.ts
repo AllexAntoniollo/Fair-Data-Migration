@@ -37,16 +37,49 @@ export class PostgresAdapter implements DatabaseAdapter {
   }
 
   async createTable(tableName: string, schema?: any): Promise<void> {
+    let query = "";
+
     if (typeof schema === "string") {
-      // Assume it's a SQL CREATE TABLE statement
-      await this.db.none(schema);
+      query = schema;
+    } else if (typeof schema === "object" && schema !== null) {
+      const columns = Object.entries(schema).map(([key, value]) => {
+        let type = "TEXT";
+
+        if (typeof value === "number") type = "INTEGER";
+        if (typeof value === "boolean") type = "BOOLEAN";
+
+        if (typeof value === "string" && !isNaN(Date.parse(value))) {
+          type = "TIMESTAMPTZ";
+        }
+
+        if (key === "_id") {
+          return `"${key}" TEXT PRIMARY KEY`;
+        }
+
+        return `"${key}" ${type}`;
+      });
+
+      query = `
+      CREATE TABLE IF NOT EXISTS "${tableName}" (
+        ${columns.join(",")}
+      )
+    `;
     } else {
-      // For now, throw error if not string
-      throw new Error("For PostgresAdapter, schema must be a SQL string");
+      throw new Error("Schema inválido para criação de tabela");
     }
+
+    await this.db.none(query);
   }
 
   async write(table: string, data: any[]) {
+    const exists = await this.db.oneOrNone(`SELECT to_regclass($1) as name`, [
+      table,
+    ]);
+
+    if (!exists?.name) {
+      await this.createTable(table, data[0]);
+    }
+
     for (const row of data) {
       const columns = Object.keys(row);
       const values = Object.values(row);
@@ -105,8 +138,6 @@ export class PostgresAdapter implements DatabaseAdapter {
   async listSchema(schemaName: string): Promise<Record<string, TableSchema>> {
     const result: Record<string, TableSchema> = {};
 
-    // 🔑 PKs
-
     const pkRows = await this.db.any(
       `
     SELECT
@@ -132,7 +163,6 @@ export class PostgresAdapter implements DatabaseAdapter {
       }
     }
 
-    // 🔗 FKs
     const fkRows = await this.db.any(
       `
     SELECT
@@ -154,7 +184,7 @@ export class PostgresAdapter implements DatabaseAdapter {
     for (const row of fkRows) {
       if (!result[row.table_name]) {
         result[row.table_name] = {
-          primaryKey: "id", // fallback
+          primaryKey: "id",
           foreignKeys: [],
         };
       }

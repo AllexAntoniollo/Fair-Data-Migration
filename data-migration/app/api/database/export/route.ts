@@ -90,7 +90,6 @@ async function exportPostgres(
 
   try {
     const adapter = new PostgresAdapter(pgDb);
-    await adapter.connect();
 
     const data = await engine.createModel(
       adapter,
@@ -117,11 +116,15 @@ async function exportMongoDB(
   tableMappings: Record<string, string>,
   engine: MigrationEngine,
 ): Promise<ModeloIntermediario> {
-  const client = new MongoClient(config.connectionString);
+  const mongoUrl = `mongodb://${config.user ? config.user + ":" + config.password + "@" : ""}${config.host}:${config.port}/${config.database}${config.authSource ? `?authSource=${config.authSource}` : ""}`;
+
+  const client = new MongoClient(mongoUrl);
 
   try {
     await client.connect();
-    const adapter = new MongoAdapter(config.database);
+    const mongoDb = client.db(config.database);
+
+    const adapter = new MongoAdapter(mongoDb);
     const data = await engine.createModel(
       adapter,
       tables,

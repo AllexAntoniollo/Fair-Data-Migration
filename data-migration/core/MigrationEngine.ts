@@ -31,9 +31,12 @@ export class MigrationEngine {
           }
 
           const mappedRecord: any = {};
-          for (const [sourceCol, value] of Object.entries(record)) {
-            const destCol = mapping[sourceCol] || sourceCol;
-            mappedRecord[destCol] = value;
+
+          for (const col of columns) {
+            if (record.hasOwnProperty(col)) {
+              const destCol = mapping[col] || col;
+              mappedRecord[destCol] = record[col];
+            }
           }
           return mappedRecord;
         });

@@ -29,16 +29,13 @@ export interface MongoDBConfig extends BaseDatabaseConfig {
   ssl?: boolean;
 }
 
-// Union type de todas as configurações
 export type DatabaseConfig = PostgreSQLConfig | MongoDBConfig;
 
-// Configuração de migração
 export interface MigrationConfig {
   source: DatabaseConfig;
   destination: DatabaseConfig;
 }
 
-// Metadados dos bancos com campos obrigatórios e opcionais
 export const DATABASE_METADATA: Record<
   DatabaseType,
   {

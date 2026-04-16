@@ -17,7 +17,9 @@ export class MongoAdapter implements DatabaseAdapter {
     }
   }
   async read(collection: string) {
-    return await this.db.collection(collection).find().toArray();
+    const res = await this.db.collection(collection).find().toArray();
+
+    return res;
   }
 
   async write(collection: string, data: any[]) {
