@@ -12,6 +12,7 @@
     "framer-motion": "^12.38.0",
     "lucide-react": "^0.555.0",
     "mongodb": "^7.1.1",
+    "neo4j-driver": "^6.0.1",
     "next": "16.0.5",
     "pg-promise": "^12.6.2",
     "react": "19.2.0",

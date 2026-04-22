@@ -5,6 +5,8 @@ import { MigrationEngine } from "@/core/MigrationEngine";
 import pgPromise from "pg-promise";
 import { MongoClient } from "mongodb";
 import { ModeloIntermediario } from "@/core/types";
+import { Neo4JAdapter } from "@/adapters/neo4j";
+import neo4j from "neo4j-driver";
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,6 +27,8 @@ export async function POST(request: NextRequest) {
       await importPostgres(connectionConfig, data, engine);
     } else if (type === "mongodb") {
       await importMongoDB(connectionConfig, data, engine);
+    } else if (type === "neo4j") {
+      await importNeo4J(connectionConfig, data, engine);
     } else {
       return NextResponse.json(
         { success: false, error: "Tipo de banco de dados não suportado" },
@@ -72,6 +76,30 @@ async function importPostgres(
   }
 }
 
+async function importNeo4J(
+  config: any,
+  data: ModeloIntermediario,
+  engine: MigrationEngine,
+): Promise<void> {
+  const uri = `bolt://${config.host}:${config.port}`;
+
+  const driver = neo4j.driver(
+    uri,
+    neo4j.auth.basic(config.user || "neo4j", config.password || ""),
+    {
+      encrypted: config.ssl || false,
+    },
+  );
+
+  try {
+    const adapter = new Neo4JAdapter(driver, config.database || "neo4j");
+    await engine.importData(adapter, data);
+    await driver.close();
+  } catch (error) {
+    await driver.close();
+    throw error;
+  }
+}
 async function importMongoDB(
   config: any,
   data: ModeloIntermediario,

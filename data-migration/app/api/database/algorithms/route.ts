@@ -3,7 +3,8 @@ import { PostgresAdapter } from "@/adapters/postgres";
 import { MongoAdapter } from "@/adapters/mongo";
 import pgPromise from "pg-promise";
 import { MongoClient } from "mongodb";
-
+import neo4j, { driver } from "neo4j-driver";
+import { Neo4JAdapter } from "@/adapters/neo4j";
 export async function POST(request: NextRequest) {
   try {
     const config = await request.json();
@@ -15,6 +16,8 @@ export async function POST(request: NextRequest) {
       algorithms = await listAlgorithmsPostgres(config);
     } else if (dbType === "mongodb") {
       algorithms = await listAlgorithmsMongoDB(config);
+    } else if (dbType === "neo4j") {
+      algorithms = await listAlgorithmsNeo4J(config);
     }
 
     return NextResponse.json({ success: true, algorithms });
@@ -24,6 +27,35 @@ export async function POST(request: NextRequest) {
       { success: false, error: (error as Error).message },
       { status: 500 },
     );
+  }
+}
+
+async function listAlgorithmsNeo4J(config: any): Promise<any[]> {
+  const uri = `bolt://${config.host}:${config.port}`;
+
+  const driver = neo4j.driver(
+    uri,
+    neo4j.auth.basic(config.user || "neo4j", config.password || ""),
+    {
+      encrypted: config.ssl || false,
+    },
+  );
+
+  const session = driver.session({
+    database: config.database || "neo4j",
+  });
+
+  const adapter = new Neo4JAdapter(driver);
+
+  try {
+    const algorithms = await adapter.listAlgorithms();
+
+    await driver.close();
+
+    return algorithms;
+  } catch (error) {
+    await driver.close();
+    throw error;
   }
 }
 

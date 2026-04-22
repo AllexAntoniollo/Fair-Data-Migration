@@ -4,6 +4,8 @@ import pgPromise from "pg-promise";
 import { MongoClient } from "mongodb";
 import { PostgresAdapter } from "@/adapters/postgres";
 import { MongoAdapter } from "@/adapters/mongo";
+import { Neo4JAdapter } from "@/adapters/neo4j";
+import neo4j from "neo4j-driver";
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,6 +51,36 @@ export async function POST(request: NextRequest) {
         });
       } catch (error) {
         await client.close();
+        throw error;
+      }
+    } else if (config.type === "neo4j") {
+      const uri = `bolt://${config.host}:${config.port}`;
+
+      const driver = neo4j.driver(
+        uri,
+        neo4j.auth.basic(config.user || "neo4j", config.password || ""),
+        {
+          encrypted: config.ssl || false,
+        },
+      );
+
+      const session = driver.session({
+        database: config.database || "neo4j",
+      });
+
+      const adapter = new Neo4JAdapter(driver);
+
+      try {
+        await adapter.connect();
+
+        await driver.close();
+
+        return NextResponse.json({
+          success: true,
+          message: "Conexão com Neo4j estabelecida com sucesso",
+        });
+      } catch (error) {
+        await driver.close();
         throw error;
       }
     }

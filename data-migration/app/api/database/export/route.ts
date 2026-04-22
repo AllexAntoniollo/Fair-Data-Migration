@@ -6,6 +6,7 @@ import pgPromise from "pg-promise";
 import { MongoClient } from "mongodb";
 import { ModeloIntermediario } from "@/core/types";
 import { DatabaseType } from "@/types/database";
+import { Neo4JAdapter } from "@/adapters/neo4j";
 
 export async function POST(request: NextRequest) {
   try {
@@ -153,6 +154,11 @@ function transformForDestination(
 
   if (destinationType === "mongodb") {
     const adapter = new MongoAdapter(null as any);
+    return adapter.transformData(data, algorithm);
+  }
+  if (destinationType === "neo4j") {
+    const adapter = new Neo4JAdapter(null as any);
+
     return adapter.transformData(data, algorithm);
   }
 

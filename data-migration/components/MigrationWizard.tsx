@@ -16,6 +16,7 @@ import { ColumnSelectionStep } from "./ColumnSelectionStep";
 import { AlgorithmSelectionStep } from "./AlgorithmSelectionStep";
 import { MigratingStep } from "./MigratingStep";
 import { NavigationButtons } from "./NavigationButtons";
+
 import { ModeloIntermediario } from "@/core/types";
 import {
   importDatabase,
@@ -491,8 +492,6 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
           )}
         </motion.div>
       </AnimatePresence>
-
-      {/* Navigation Buttons */}
       <NavigationButtons
         step={step}
         onBack={() => {

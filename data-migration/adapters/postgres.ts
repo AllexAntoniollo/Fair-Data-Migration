@@ -138,64 +138,86 @@ export class PostgresAdapter implements DatabaseAdapter {
   async listSchema(schemaName: string): Promise<Record<string, TableSchema>> {
     const result: Record<string, TableSchema> = {};
 
+    // 1. Buscar Tabelas e Primary Keys
     const pkRows = await this.db.any(
-      `
-    SELECT
-      tc.table_name,
-      kcu.column_name
-    FROM information_schema.table_constraints tc
-    JOIN information_schema.key_column_usage kcu
-      ON tc.constraint_name = kcu.constraint_name
-    WHERE tc.constraint_type = 'PRIMARY KEY'
-      AND tc.table_schema = $1
-  `,
+      `SELECT 
+        tc.table_name, 
+        kcu.column_name 
+     FROM information_schema.table_constraints tc 
+     JOIN information_schema.key_column_usage kcu 
+       ON tc.constraint_name = kcu.constraint_name 
+     WHERE tc.constraint_type = 'PRIMARY KEY' 
+       AND tc.table_schema = $1`,
       [schemaName],
     );
 
     for (const row of pkRows) {
-      if (!result[row.table_name]) {
-        result[row.table_name] = {
-          primaryKey: row.column_name,
-          foreignKeys: [],
-        };
-      } else {
-        result[row.table_name].primaryKey = row.column_name;
-      }
+      result[row.table_name] = {
+        primaryKey: row.column_name,
+        foreignKeys: [],
+        // Adicionei 'columns' para o cálculo do MAX_UATT do artigo
+        columns: [],
+      };
     }
 
+    // 2. Buscar Foreign Keys e verificar se são UNIQUE
     const fkRows = await this.db.any(
-      `
-    SELECT
-      tc.table_name,
-      kcu.column_name,
-      ccu.table_name AS foreign_table_name,
-      ccu.column_name AS foreign_column_name
-    FROM information_schema.table_constraints tc
-    JOIN information_schema.key_column_usage kcu
-      ON tc.constraint_name = kcu.constraint_name
-    JOIN information_schema.constraint_column_usage ccu
-      ON ccu.constraint_name = tc.constraint_name
-    WHERE tc.constraint_type = 'FOREIGN KEY'
-      AND tc.table_schema = $1
-  `,
+      `SELECT
+        tc.table_name,
+        kcu.column_name,
+        ccu.table_name AS foreign_table_name,
+        ccu.column_name AS foreign_column_name,
+        EXISTS (
+            SELECT 1 
+            FROM information_schema.table_constraints tc2
+            JOIN information_schema.key_column_usage kcu2 
+              ON tc2.constraint_name = kcu2.constraint_name
+            WHERE tc2.table_name = tc.table_name 
+              AND kcu2.column_name = kcu.column_name
+              AND tc2.constraint_type IN ('UNIQUE', 'PRIMARY KEY')
+              AND tc2.constraint_name <> tc.constraint_name -- Não é a própria FK
+        ) as is_unique
+     FROM information_schema.table_constraints tc
+     JOIN information_schema.key_column_usage kcu
+       ON tc.constraint_name = kcu.constraint_name
+     JOIN information_schema.constraint_column_usage ccu
+       ON ccu.constraint_name = tc.constraint_name
+     WHERE tc.constraint_type = 'FOREIGN KEY'
+       AND tc.table_schema = $1`,
       [schemaName],
     );
 
     for (const row of fkRows) {
       if (!result[row.table_name]) {
         result[row.table_name] = {
-          primaryKey: "id",
+          primaryKey: "",
           foreignKeys: [],
+          columns: [],
         };
       }
 
       result[row.table_name].foreignKeys.push({
         field: row.column_name,
+        isUnique: row.is_unique, // <--- Nova flag para o Algorithm 3
         references: {
           table: row.foreign_table_name,
           field: row.foreign_column_name,
         },
       });
+    }
+
+    // 3. (Opcional) Buscar nomes das colunas para respeitar o MAX_UATT do artigo
+    const colRows = await this.db.any(
+      `SELECT table_name, column_name 
+     FROM information_schema.columns 
+     WHERE table_schema = $1`,
+      [schemaName],
+    );
+
+    for (const row of colRows) {
+      if (result[row.table_name]) {
+        result[row.table_name].columns.push(row.column_name);
+      }
     }
 
     return result;

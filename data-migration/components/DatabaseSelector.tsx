@@ -2,7 +2,6 @@
 
 import React from "react";
 import { motion } from "framer-motion";
-import { ArrowRight } from "lucide-react";
 import { DatabaseType, DATABASE_METADATA } from "@/types/database";
 
 interface DatabaseSelectorProps {
@@ -16,7 +15,9 @@ export const DatabaseSelector: React.FC<DatabaseSelectorProps> = ({
   selected,
   onSelect,
 }) => {
-  const databases: DatabaseType[] = ["postgresql", "mongodb"];
+  const databases: DatabaseType[] = Object.keys(
+    DATABASE_METADATA,
+  ) as DatabaseType[];
 
   return (
     <div className="flex flex-col gap-4">

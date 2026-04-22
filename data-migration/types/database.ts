@@ -1,5 +1,5 @@
 // Tipos base para todo banco de dados
-export type DatabaseType = "postgresql" | "mongodb";
+export type DatabaseType = "postgresql" | "mongodb" | "neo4j";
 
 export interface BaseDatabaseConfig {
   type: DatabaseType;
@@ -29,7 +29,18 @@ export interface MongoDBConfig extends BaseDatabaseConfig {
   ssl?: boolean;
 }
 
-export type DatabaseConfig = PostgreSQLConfig | MongoDBConfig;
+// Neo4j Configuration
+export interface Neo4jConfig extends BaseDatabaseConfig {
+  type: "neo4j";
+  host: string;
+  port: number;
+  user?: string;
+  password?: string;
+  database: string;
+  ssl?: boolean;
+}
+
+export type DatabaseConfig = PostgreSQLConfig | MongoDBConfig | Neo4jConfig;
 
 export interface MigrationConfig {
   source: DatabaseConfig;
@@ -58,6 +69,14 @@ export const DATABASE_METADATA: Record<
   mongodb: {
     label: "MongoDB",
     icon: "🍃",
+    fields: {
+      required: ["host", "port", "database"],
+      optional: ["user", "password", "authSource", "ssl"],
+    },
+  },
+  neo4j: {
+    label: "Neo4j",
+    icon: "🧠",
     fields: {
       required: ["host", "port", "database"],
       optional: ["user", "password", "authSource", "ssl"],

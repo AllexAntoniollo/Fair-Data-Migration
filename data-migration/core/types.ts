@@ -1,5 +1,6 @@
 export type ForeignKey = {
   field: string;
+  isUnique: boolean; // Essencial para o Algorithm 3 (Identificar relações 1:1 para unificação)
   references: {
     table: string;
     field: string;
@@ -9,13 +10,36 @@ export type ForeignKey = {
 export type TableSchema = {
   primaryKey: string;
   foreignKeys: ForeignKey[];
+  columns: string[]; // Necessário para o cálculo de MAX_UATT e MAX_NKEY (contagem de atributos)
+};
+
+export type GraphMapping = {
+  type: "node" | "edge";
+  isJoinTable?: boolean;
+  // Lista de tabelas que foram "absorvidas" por esta (Unificação do Passo 3)
+  unifiedTables?: string[];
+  edges?: {
+    field: string;
+    targetTable: string;
+  }[];
 };
 
 export type ModeloIntermediario = {
-  data: { [key: string]: any[] };
+  data: { [table: string]: any[] };
   schema: { [table: string]: TableSchema };
+  mapping?: {
+    [table: string]: GraphMapping;
+  };
 };
 
+// Interface auxiliar para os parâmetros que o artigo solicita (userInput)
+export interface GraphenedUserInput {
+  MAX_NKEY?: number; // Default 2
+  MAX_UATT?: number; // Default 100%
+  NJTab?: string[]; // Tabelas proibidas de serem Join Tables
+  JTab?: string[]; // Tabelas forçadas a serem Join Tables
+  NUTab?: string[]; // Tabelas proibidas de serem unificadas
+}
 export type AlgorithmInfo = {
   id: number;
   name: string;

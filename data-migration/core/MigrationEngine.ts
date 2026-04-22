@@ -1,3 +1,4 @@
+import { Neo4JAdapter } from "@/adapters/neo4j";
 import { DatabaseAdapter, ModeloIntermediario, TableSchema } from "./types";
 
 export class MigrationEngine {
@@ -13,15 +14,17 @@ export class MigrationEngine {
 
     let fullSchema: Record<string, TableSchema> = {};
 
+    // 1. Carregar metadados completos (incluindo isUnique e colunas totais)
     if (adapter.listSchema) {
       fullSchema = await adapter.listSchema("public");
     }
 
     for (const table of selectedTables) {
       const destTable = tableMappings?.[table] || table;
+      const columns = selectedColumns[table] || [];
 
       try {
-        const columns = selectedColumns[table] || [];
+        // 2. Ler os dados
         const data = await adapter.read(table, columns.join(", "));
 
         dataDict[destTable] = data.map((record) => {
@@ -31,7 +34,6 @@ export class MigrationEngine {
           }
 
           const mappedRecord: any = {};
-
           for (const col of columns) {
             if (record.hasOwnProperty(col)) {
               const destCol = mapping[col] || col;
@@ -45,35 +47,42 @@ export class MigrationEngine {
         dataDict[destTable] = [];
       }
 
-      // 🧠 2. Montar schema da tabela (PK + FK)
-
+      // 🧠 3. Montar schema da tabela atualizado para o Algorithm 1
       const tableSchema = fullSchema[table];
+      const columnMap = columnMappings?.[table] || {};
 
       if (tableSchema) {
-        const columnMap = columnMappings?.[table] || {};
-
-        // 🔑 mapear PK (caso coluna tenha sido renomeada)
+        // 🔑 mapear PK
         const mappedPK =
           columnMap[tableSchema.primaryKey] || tableSchema.primaryKey;
 
-        // 🔗 mapear FKs (coluna e nome da tabela)
+        // 🔗 mapear FKs com campo isUnique preservado
         const mappedFKs = tableSchema.foreignKeys.map((fk) => ({
           field: columnMap[fk.field] || fk.field,
+          isUnique: fk.isUnique, // MANTÉM A FLAG PARA UNIFICAÇÃO
           references: {
             table: tableMappings?.[fk.references.table] || fk.references.table,
             field: fk.references.field,
           },
         }));
 
+        // 📊 mapear Lista de Colunas (usado para MAX_UATT e MAX_NKEY)
+        // Se o usuário renomeou as colunas, mapeamos os nomes novos aqui também
+        const mappedColumns = (tableSchema.columns || columns).map(
+          (col) => columnMap[col] || col,
+        );
+
         schemaDict[destTable] = {
           primaryKey: mappedPK,
           foreignKeys: mappedFKs,
+          columns: mappedColumns, // NOVO CAMPO
         };
       } else {
-        // fallback
+        // Fallback robusto
         schemaDict[destTable] = {
           primaryKey: "id",
           foreignKeys: [],
+          columns: columns.map((col) => columnMap[col] || col), // NOVO CAMPO
         };
       }
     }
@@ -88,8 +97,12 @@ export class MigrationEngine {
     adapter: DatabaseAdapter,
     data: ModeloIntermediario,
   ): Promise<void> {
-    for (const [table, records] of Object.entries(data.data)) {
-      await adapter.write(table, records);
+    if (adapter instanceof Neo4JAdapter) {
+      await adapter.write("", [data]);
+    } else {
+      for (const [table, records] of Object.entries(data.data)) {
+        await adapter.write(table, records);
+      }
     }
   }
 
