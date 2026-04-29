@@ -190,7 +190,16 @@ export class Neo4JAdapter implements DatabaseAdapter {
         throw new Error("Algoritmo inválido");
     }
   }
+  private hasCycle(unifiedMap: any, from: any, to: any) {
+    let current = to;
 
+    while (unifiedMap.has(current)) {
+      current = unifiedMap.get(current);
+      if (current === from) return true;
+    }
+
+    return false;
+  }
   private algorithm1(
     data: ModeloIntermediario,
     userInput: GraphenedUserInput = {},
@@ -209,7 +218,7 @@ export class Neo4JAdapter implements DatabaseAdapter {
     const NUTab = new Set(userInput.NUTab ?? []);
 
     const joinTables = new Set<string>();
-    const unifiedMap = new Map<string, string>(); // [TabelaAbsorvida] -> [TabelaPai]
+    const unifiedMap = new Map<string, string>();
 
     for (const t in schema) {
       const tableSchema = schema[t];
@@ -227,9 +236,9 @@ export class Neo4JAdapter implements DatabaseAdapter {
       const isStructurallyJoin = nbFK === 2 && nbReft === 0;
       const meetsAttributeThreshold = numNonPkColumns <= MAX_NKEY;
 
-      // Lógica: (Estrutura N:N + Limite de Atributos OU Forçado pelo User) E Não Proibido
       if (
-        ((isStructurallyJoin && meetsAttributeThreshold) || JTab.has(t)) &&
+        isStructurallyJoin &&
+        (meetsAttributeThreshold || JTab.has(t)) &&
         !NJTab.has(t)
       ) {
         joinTables.add(t);
@@ -239,6 +248,7 @@ export class Neo4JAdapter implements DatabaseAdapter {
     // -----------------------------------------------------------
     // 2. Unificar Tabelas (Algorithm 3)
     // -----------------------------------------------------------
+
     for (const table in schema) {
       if (joinTables.has(table)) continue;
       if (NUTab.has(table)) continue;
@@ -248,26 +258,18 @@ export class Neo4JAdapter implements DatabaseAdapter {
       for (const fk of fks) {
         const fkTable = fk.references.table;
 
-        // Regras de Unificação:
-        // - Não unificar consigo mesma
-        // - fkTable não pode ser uma Join Table
-        // - fkTable não pode já ter sido absorvida por outra
-        // - A relação deve ser 1:1 (isUnique)
         if (
           table !== fkTable &&
           !joinTables.has(fkTable) &&
           !unifiedMap.has(fkTable) &&
-          fk.isUnique
+          fk.isUnique &&
+          !this.hasCycle(unifiedMap, table, fkTable)
         ) {
           const currSize = schema[table].columns.length;
           const fkTableSize = schema[fkTable].columns.length;
 
-          // Limite de crescimento do nó (MAX_UATT)
           if (currSize + fkTableSize <= MAX_UATT) {
-            // Evitar ciclos simples (A -> B e B -> A)
-            if (unifiedMap.get(table) !== fkTable) {
-              unifiedMap.set(fkTable, table);
-            }
+            unifiedMap.set(fkTable, table);
           }
         }
       }
@@ -277,7 +279,6 @@ export class Neo4JAdapter implements DatabaseAdapter {
     // 3. Definir Mapping e Tratar Arestas
     // -----------------------------------------------------------
 
-    // Primeiro, criamos os mapeamentos apenas para tabelas que NÃO foram absorvidas
     for (const table in schema) {
       if (unifiedMap.has(table)) continue;
 
