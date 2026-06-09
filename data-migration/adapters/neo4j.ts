@@ -81,20 +81,37 @@ export class Neo4JAdapter implements DatabaseAdapter {
       }
     }
 
-    // Insert nodes
+    // Insert nodes (BATCH)
     for (const table in modelo.mapping) {
       const map = modelo.mapping[table];
+
       if (map.type === "node") {
         const nodeLabel = table;
+
         const allTables = [table, ...(map.unifiedTables || [])];
+
         const allData = allTables.flatMap((t) => modelo.data[t] || []);
+
         const pk = modelo.schema[table].primaryKey;
-        for (const row of allData) {
-          const properties = { ...row };
+
+        const BATCH_SIZE = 1000;
+
+        for (let i = 0; i < allData.length; i += BATCH_SIZE) {
+          const batch = allData.slice(i, i + BATCH_SIZE);
+
           await this.session.run(
-            `MERGE (n:${nodeLabel} {${pk}: $${pk}}) SET n += $props`,
-            { [pk]: row[pk], props: properties },
+            `
+        UNWIND $rows AS row
+
+        MERGE (n:${nodeLabel} {${pk}: row.${pk}})
+        SET n += row
+        `,
+            {
+              rows: batch,
+            },
           );
+
+          console.log(`[NODE BATCH] ${nodeLabel} ${i}/${allData.length}`);
         }
       }
     }
@@ -102,58 +119,46 @@ export class Neo4JAdapter implements DatabaseAdapter {
     // Insert relationships from node edges
     for (const table in modelo.mapping) {
       const map = modelo.mapping[table];
+
       if (map.type === "node") {
         const nodeLabel = table;
+
         for (const edge of map.edges || []) {
           const targetLabel =
             nodeLabelMap.get(edge.targetTable) || edge.targetTable;
           const tableData = modelo.data[table] || [];
           const pk = modelo.schema[table].primaryKey;
           const targetPk = modelo.schema[edge.targetTable].primaryKey;
-          for (const row of tableData) {
-            const fkValue = row[edge.field];
-            if (fkValue) {
-              await this.session.run(
-                `
-                MATCH (n:${nodeLabel} {${pk}: $sourceId})
-                MATCH (m:${targetLabel} {${targetPk}: $targetId})
-                MERGE (n)-[:${edge.field.toUpperCase()}]->(m)
-              `,
-                { sourceId: row[pk], targetId: fkValue },
-              );
-            }
-          }
-        }
-      }
-    }
 
-    // Insert relationships from join tables (edges)
-    for (const table in modelo.mapping) {
-      const map = modelo.mapping[table];
-      if (map.type === "edge") {
-        const joinData = modelo.data[table] || [];
-        const fks = modelo.schema[table].foreignKeys;
-        if (fks.length === 2) {
-          const sourceTable = fks[0].references.table;
-          const targetTable = fks[1].references.table;
-          const sourceLabel = nodeLabelMap.get(sourceTable) || sourceTable;
-          const targetLabel = nodeLabelMap.get(targetTable) || targetTable;
-          const sourcePk = modelo.schema[sourceTable].primaryKey;
-          const targetPk = modelo.schema[targetTable].primaryKey;
-          const relType = table.toUpperCase().replace(/_/g, "");
-          for (const row of joinData) {
-            const sourceId = row[fks[0].field];
-            const targetId = row[fks[1].field];
-            const relProps = { ...row };
-            delete relProps[fks[0].field];
-            delete relProps[fks[1].field];
+          const relType = `${table}_${edge.field}`
+            .toUpperCase()
+            .replace(/[^A-Z0-9_]/g, "_")
+            .replace(/^_|_$/g, "");
+
+          // 1. Coleta todos os pares válidos de uma vez
+          const pairs = tableData
+            .filter((row) => row[edge.field] != null)
+            .map((row) => ({ sourceId: row[pk], targetId: row[edge.field] }));
+
+          if (pairs.length === 0) continue;
+
+          console.log(
+            `[GRAPHENED][REL] ${table} --(${relType})-> ${edge.targetTable} | ${pairs.length} rels`,
+          );
+
+          // 2. Dispara em lotes para não estourar memória/tx no Neo4j
+          const BATCH_SIZE = 1000;
+          for (let i = 0; i < pairs.length; i += BATCH_SIZE) {
+            const batch = pairs.slice(i, i + BATCH_SIZE);
+
             await this.session.run(
               `
-              MATCH (n:${sourceLabel} {${sourcePk}: $sourceId})
-              MATCH (m:${targetLabel} {${targetPk}: $targetId})
-              MERGE (n)-[r:${relType}]->(m) SET r += $relProps
-            `,
-              { sourceId, targetId, relProps },
+          UNWIND $batch AS pair
+          MATCH (n:${nodeLabel} {${pk}: pair.sourceId})
+          MATCH (m:${targetLabel} {${targetPk}: pair.targetId})
+          MERGE (n)-[:${relType}]->(m)
+          `,
+              { batch },
             );
           }
         }

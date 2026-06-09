@@ -89,7 +89,6 @@ export class MongoAdapter implements DatabaseAdapter {
     const transformed: ModeloIntermediario = { data: {}, schema };
 
     const aggregatedTables = new Set<string>();
-
     const JTList = new Set<string>();
 
     const sortedTableNames = Object.keys(tables).sort(
@@ -100,13 +99,10 @@ export class MongoAdapter implements DatabaseAdapter {
 
     for (const t of sortedTableNames) {
       const tableSchema = schema[t];
-
       const nbFK = tableSchema.foreignKeys.length;
-
       const nbReft = Object.values(schema).filter((s) =>
         s.foreignKeys.some((fk) => fk.references.table === t),
       ).length;
-
       const pk = tableSchema.primaryKey;
       const sample = tables[t]?.[0] || {};
       const nbCols = Object.keys(sample).length - (pk ? 1 : 0) - nbFK;
@@ -123,17 +119,13 @@ export class MongoAdapter implements DatabaseAdapter {
 
       const tableSchema = schema[table];
       const pk = tableSchema.primaryKey;
-
       transformed.data[table] = [];
 
       for (const r of tables[table]) {
         const D: any = { ...r };
 
-        let usedJoin = false;
+        // Bloco 1: join tables
         for (const jtName of JTList) {
-          if (aggregatedTables.has(jtName)) {
-            continue;
-          }
           const jtSchema = schema[jtName];
           const fkToCurrent = jtSchema.foreignKeys.find(
             (f) => f.references.table === table,
@@ -143,16 +135,9 @@ export class MongoAdapter implements DatabaseAdapter {
           );
 
           if (fkToCurrent && fkToOther) {
-            const matches = [];
-
-            for (const joinRow of tables[jtName]) {
-              const joinValue = joinRow[fkToCurrent.field];
-              const currentId = r[pk];
-
-              if (joinValue === currentId) {
-                matches.push(joinRow);
-              }
-            }
+            const matches = tables[jtName].filter(
+              (joinRow) => joinRow[fkToCurrent.field] === r[pk],
+            );
 
             if (matches.length > 0) {
               const otherTable = fkToOther.references.table;
@@ -170,41 +155,48 @@ export class MongoAdapter implements DatabaseAdapter {
                 D[otherTable] = relatedData;
                 aggregatedTables.add(jtName);
                 aggregatedTables.add(otherTable);
-
-                usedJoin = true;
               }
             }
           }
         }
 
-        if (usedJoin) {
-          transformed.data[table].push(D);
-          continue;
+        // Bloco 2: tabelas filhas com 1 FK apontando para a tabela atual (pai)
+        for (const [trName, trSchema] of Object.entries(schema)) {
+          if (trSchema.foreignKeys.length !== 1) continue;
+          const fk = trSchema.foreignKeys[0];
+          if (fk.references.table !== table) continue;
+          if (transformed.data[trName] !== undefined) continue;
+
+          const relatedRows = tables[trName].filter(
+            (childRow) => childRow[fk.field] === r[pk],
+          );
+
+          if (relatedRows.length > 0) {
+            D[trName] = relatedRows;
+            aggregatedTables.add(trName);
+          }
         }
 
-        for (const [trName, trSchema] of Object.entries(schema)) {
-          const nbFK = trSchema.foreignKeys.length;
+        // Bloco 3 (opção B): FKs diretas da tabela atual para tabelas "lookup"
+        // Ex: film.language_id → language. Embutir o registro pai como subdocumento.
+        for (const fk of tableSchema.foreignKeys) {
+          const parentTable = fk.references.table;
 
-          if (nbFK === 1) {
-            const fk = trSchema.foreignKeys[0];
+          // Só embutir se a tabela pai não tem FKs próprias (é uma tabela lookup/dimensão)
+          // e não foi marcada como coleção independente ainda
+          const parentSchema = schema[parentTable];
+          if (!parentSchema) continue;
+          if (parentSchema.foreignKeys.length > 0) continue;
+          if (JTList.has(parentTable)) continue;
 
-            if (fk.references.table === table) {
-              const relatedRows = [];
+          const parentPK = parentSchema.primaryKey;
+          const parentRow = tables[parentTable]?.find(
+            (row) => row[parentPK] === r[fk.field],
+          );
 
-              for (const childRow of tables[trName]) {
-                const childForeignKey = childRow[fk.field];
-                const parentPrimaryKey = r[pk];
-
-                if (childForeignKey === parentPrimaryKey) {
-                  relatedRows.push(childRow);
-                }
-              }
-
-              if (relatedRows.length > 0) {
-                D[trName] = relatedRows;
-                aggregatedTables.add(trName);
-              }
-            }
+          if (parentRow) {
+            D[parentTable] = parentRow;
+            aggregatedTables.add(parentTable);
           }
         }
 

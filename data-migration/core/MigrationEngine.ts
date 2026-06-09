@@ -14,7 +14,6 @@ export class MigrationEngine {
 
     let fullSchema: Record<string, TableSchema> = {};
 
-    // 1. Carregar metadados completos (incluindo isUnique e colunas totais)
     if (adapter.listSchema) {
       fullSchema = await adapter.listSchema("public");
     }
@@ -24,7 +23,6 @@ export class MigrationEngine {
       const columns = selectedColumns[table] || [];
 
       try {
-        // 2. Ler os dados
         const data = await adapter.read(table, columns.join(", "));
 
         dataDict[destTable] = data.map((record) => {
@@ -47,27 +45,22 @@ export class MigrationEngine {
         dataDict[destTable] = [];
       }
 
-      // 🧠 3. Montar schema da tabela atualizado para o Algorithm 1
       const tableSchema = fullSchema[table];
       const columnMap = columnMappings?.[table] || {};
 
       if (tableSchema) {
-        // 🔑 mapear PK
         const mappedPK =
           columnMap[tableSchema.primaryKey] || tableSchema.primaryKey;
 
-        // 🔗 mapear FKs com campo isUnique preservado
         const mappedFKs = tableSchema.foreignKeys.map((fk) => ({
           field: columnMap[fk.field] || fk.field,
-          isUnique: fk.isUnique, // MANTÉM A FLAG PARA UNIFICAÇÃO
+          isUnique: fk.isUnique,
           references: {
             table: tableMappings?.[fk.references.table] || fk.references.table,
             field: fk.references.field,
           },
         }));
 
-        // 📊 mapear Lista de Colunas (usado para MAX_UATT e MAX_NKEY)
-        // Se o usuário renomeou as colunas, mapeamos os nomes novos aqui também
         const mappedColumns = (tableSchema.columns || columns).map(
           (col) => columnMap[col] || col,
         );
@@ -75,14 +68,13 @@ export class MigrationEngine {
         schemaDict[destTable] = {
           primaryKey: mappedPK,
           foreignKeys: mappedFKs,
-          columns: mappedColumns, // NOVO CAMPO
+          columns: mappedColumns,
         };
       } else {
-        // Fallback robusto
         schemaDict[destTable] = {
           primaryKey: "id",
           foreignKeys: [],
-          columns: columns.map((col) => columnMap[col] || col), // NOVO CAMPO
+          columns: columns.map((col) => columnMap[col] || col),
         };
       }
     }
